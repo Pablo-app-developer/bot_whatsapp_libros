@@ -22,7 +22,7 @@ Cada libro cuesta **$20.000 COP**. El bot envía al cliente el link de la págin
 |---|---|
 | GitHub | `https://github.com/Pablo-app-developer/bot_whatsapp_libros` |
 | Dominio público | `formacionparatodos.online` |
-| URL Railway | `https://bot-whatsapp-libros-production.up.railway.app` |
+| URL Railway | `https://bot-whatsapp-libros-production.up.railway.app` (live 24/7) |
 | Número WhatsApp | `+57 318 927 7573` |
 | Phone Number ID | `1143854128805185` |
 | WABA ID | `4296970973856614` |
