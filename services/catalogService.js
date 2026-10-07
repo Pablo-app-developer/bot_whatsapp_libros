@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from '../utils/logger.js';
+import { getPackByCategory } from './packService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CATALOG_PATH = path.join(__dirname, '..', 'data', 'catalog.json');
@@ -38,10 +39,12 @@ export const listBooksByCategory = (categoryName, limit = 12) => {
     const target = norm(categoryName);
     for (const [name, books] of _byCategory) {
         if (norm(name).includes(target) || target.includes(norm(name))) {
+            const related_pack = getPackByCategory(name);
             return {
                 category: name,
                 total: books.length,
                 books: books.slice(0, limit).map(b => ({ id: b.id, title: b.title })),
+                ...(related_pack ? { related_pack } : {}),
             };
         }
     }
@@ -52,7 +55,7 @@ export const searchBooks = (query, limit = 8) => {
     load();
     const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     const terms = norm(query).split(/\s+/).filter(t => t.length > 2);
-    if (terms.length === 0) return [];
+    if (terms.length === 0) return { query, results: [] };
 
     const scored = _catalog.map(b => {
         const hay = norm(b.title + ' ' + b.category);
@@ -63,11 +66,24 @@ export const searchBooks = (query, limit = 8) => {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 
-    return scored.map(x => ({
+    const results = scored.map(x => ({
         id: x.book.id,
         title: x.book.title,
         category: x.book.category,
     }));
+
+    // Si la mayoría (>=60%) cae en una misma categoría con pack, sugerir ese pack
+    let related_pack = null;
+    if (results.length >= 3) {
+        const freq = {};
+        results.forEach(r => { freq[r.category] = (freq[r.category] || 0) + 1; });
+        const [topCat, topCount] = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+        if (topCount / results.length >= 0.6) {
+            related_pack = getPackByCategory(topCat);
+        }
+    }
+
+    return { query, results, ...(related_pack ? { related_pack } : {}) };
 };
 
 export const getBookById = (id) => {

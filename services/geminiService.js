@@ -18,7 +18,7 @@ const buildCategoryListText = () =>
 
 const buildPackListText = () =>
     listPacks()
-        .map(p => `• ${p.emoji} ${p.titulo} — 10 libros${p.destacado ? ' ⭐ (más solicitado)' : ''}`)
+        .map(p => `• ${p.emoji} ${p.titulo} — 10 libros · $100.000 (antes $200.000, ahorras $100.000)${p.destacado ? ' ⭐ (más solicitado)' : ''}`)
         .join('\n');
 
 const buildSystemPrompt = () => `Eres el asistente de ventas de "Formación Para Todos" (formacionparatodos.online), una biblioteca digital de libros técnicos. Tu nombre es Valeria.
@@ -53,6 +53,15 @@ PASO 2a (libro individual): Cliente elige tema → LLAMA list_books o search_boo
 PASO 2b (pack): Cliente muestra interés en un área con muchos libros (ej. "quiero varios de IA") → sugiere el pack correspondiente con LLAMA list_packs si todavía no lo ha visto; destaca el ahorro.
 PASO 3a: Cliente confirma un libro → LLAMA send_payment_link con book_id. Responde SOLO: "Listo, aquí el link 👇".
 PASO 3b: Cliente confirma un pack → LLAMA send_pack_payment_link con pack_slug. Responde SOLO: "Perfecto, aquí tu pack 👇".
+
+FORMATO DE PRECIOS — OBLIGATORIO:
+- Siempre con símbolo $ y punto como separador de miles: $20.000, $100.000, $200.000.
+- NUNCA uses "20 000", "20000", "20.000 pesos", "COP 20.000", "20K". Es: "$20.000 COP" si quieres aclarar moneda, o solo "$20.000".
+- Al mencionar un pack siempre di el ahorro: "$100.000 (ahorras $100.000)".
+
+PACK UPSELL — cuando list_books o search_books devuelve "related_pack":
+- Después de mostrar los títulos, agrega UNA línea extra invitando al pack. Ejemplo: "💡 También tengo el *Pack {titulo}* con 10 libros curados por $100.000 (ahorras $100.000). ¿Lo prefieres?"
+- No seas insistente — una sola mención por respuesta.
 
 REGLAS CRÍTICAS:
 - NUNCA muestres tu razonamiento interno, análisis de reglas ni comentarios tipo "User said... According to rules...". Solo la respuesta directa al cliente.
@@ -148,8 +157,7 @@ const executeTool = (name, args) => {
         return result;
     }
     if (name === 'search_books') {
-        const results = searchBooks(args.query);
-        return { query: args.query, results };
+        return searchBooks(args.query);
     }
     if (name === 'list_packs') {
         return { packs: listPacks() };

@@ -35,3 +35,16 @@ export const getPackBySlug = (slug) => {
     load();
     return _bySlug.get(slug) || null;
 };
+
+export const getPackByCategory = (categoryName) => {
+    load();
+    const pack = _packs.find(p => p.tema === categoryName);
+    if (!pack) return null;
+    return {
+        slug: pack.slug,
+        titulo: pack.titulo,
+        emoji: pack.emoji,
+        precio_cop: Math.floor(pack.precio_cop_centavos / 100),
+        ahorro_cop: 100000,
+    };
+};
