@@ -85,7 +85,7 @@ const TOOLS = [
         type: 'function',
         function: {
             name: 'send_payment_link',
-            description: 'Envía el link de pago Mercado Pago al cliente. Úsalo SOLO cuando el cliente confirme que quiere comprar un libro específico del catálogo.',
+            description: 'Envía el link de pago al cliente (checkout Bold en formacionparatodos.online). Úsalo SOLO cuando el cliente confirme que quiere comprar un libro específico del catálogo.',
             parameters: {
                 type: 'object',
                 properties: {

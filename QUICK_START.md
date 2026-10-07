@@ -7,7 +7,6 @@ Guía práctica para trabajar con este bot. Para arquitectura completa ver `READ
 ## Correr en local
 
 ```bash
-cd backend
 npm install
 cp .env.example .env   # y completa las variables
 npm start
@@ -18,55 +17,63 @@ El servidor arranca en `http://localhost:3001`. Endpoints útiles:
 - `GET /health` → status + variables detectadas
 - `GET /webhook` → verificación Meta (usa `WHATSAPP_WEBHOOK_VERIFY_TOKEN`)
 - `POST /webhook` → mensajes entrantes de WhatsApp
-- `POST /mp-webhook` → notificaciones de Mercado Pago
 
-Para probar con WhatsApp real necesitas exponer el puerto (ngrok, o directamente Railway).
+Para probar con WhatsApp real necesitas exponer el puerto: `ngrok http 3001` y configurar la URL HTTPS en Meta for Developers.
 
 ---
 
 ## Estructura del proyecto
 
 ```
-backend/
+bot_whatsapp_libros/
 ├── server.js                        → Express app + rutas
 ├── data/
-│   ├── catalog.json                 → 434 libros (categoría, título, url Drive)
-│   ├── orders.json                  → órdenes de compra
-│   └── clients.json                 → clientes
+│   ├── catalog.json                 → 433 libros (id, categoría, título, url Drive, slug)
+│   ├── orders.json                  → (legacy — no se escribe en flujo D1)
+│   └── clients.json                 → (legacy — no se escribe en flujo D1)
 ├── controllers/
 │   └── whatsappController.js        → handler principal /webhook
 └── services/
     ├── geminiService.js             → IA Valeria (Groq + function calling)
     ├── catalogService.js            → listCategories / listBooksByCategory / searchBooks
-    ├── paymentService.js            → Mercado Pago (Checkout Pro)
-    ├── credentialService.js         → deliverBook (envía link Drive tras pago)
-    ├── orderService.js              → CRUD de órdenes
+    ├── paymentService.js            → genera URL formacionparatodos.online/libro/<slug>
     ├── whatsappService.js           → envío + mark-as-read via Meta API
-    └── adminService.js              → comandos !admin
+    └── adminService.js              → comandos !admin (legacy, usa order/inventoryService)
 ```
 
 ---
 
 ## Cómo agregar/quitar libros
 
-Editar `data/catalog.json` a mano o regenerar desde el Google Sheet. Formato:
+El catálogo del bot vive en `data/catalog.json`. **Fuente de verdad**: `libros.json` del repo `pagina_libros_oreilly_repo`. Para resincronizar:
+
+```js
+const libros = require('../pagina_libros_oreilly_repo/libros.json')
+  .filter(l => l.disponible && l.drive_url && l.idioma === 'ES')
+  .sort((a,b) => (a.tema||'').localeCompare(b.tema||'') || (a.titulo||'').localeCompare(b.titulo||''));
+const out = libros.map((l,i) => ({ id: i+1, category: l.tema, title: l.titulo, url: l.drive_url, slug: l.slug }));
+fs.writeFileSync('data/catalog.json', JSON.stringify(out, null, 2));
+```
+
+Formato de cada entrada:
 
 ```json
 {
   "id": 1,
   "category": "Arquitectura de Software",
   "title": "Aprendizaje de estilos de API",
-  "url": "https://drive.google.com/drive/folders/..."
+  "url": "https://drive.google.com/drive/folders/...",
+  "slug": "aprendizaje-de-estilos-de-api"
 }
 ```
 
-Los `id` deben ser únicos y estables (el LLM los usa para llamar `send_payment_link`).
+Los `id` son secuenciales (se usan por el LLM al llamar `send_payment_link`). El `slug` es la clave para armar el link `/libro/<slug>` del sitio.
 
 ---
 
 ## Cómo cambiar la personalidad / prompt de Valeria
 
-Editar el `buildSystemPrompt()` en `services/geminiService.js`. Ese archivo también define las 3 tools que el modelo puede llamar. Si cambias los nombres/parámetros de las tools, actualiza también el `executeTool()` y el prompt.
+Editar `buildSystemPrompt()` en `services/geminiService.js`. Ese archivo también define las 3 tools que el modelo puede llamar. Si cambias nombres/parámetros de tools, actualiza también `executeTool()`.
 
 ---
 
@@ -83,33 +90,25 @@ Cliente: quiero uno de kubernetes
 
 Cliente: el 2
   → LLM llama tool send_payment_link(book_id)
-  → controller genera link MP y lo envía
+  → controller llama paymentService.getPaymentLink
+  → bot envía: "💳 Link de pago: formacionparatodos.online/libro/<slug>...
+                 📬 Al confirmar el pago, el libro te llega automáticamente a tu correo."
 
-[cliente paga → POST /mp-webhook]
-  → paymentService.handleMPWebhook
-  → deliverBook envía el link de Drive al WhatsApp del cliente
+[cliente paga con Bold en la web → /gracias → Resend envía el libro por email]
 ```
 
 Máximo 3 vueltas de tool-use por mensaje (definido en `geminiService.js`).
 
+El bot **no** verifica el pago ni entrega el PDF; ambas cosas pasan en la web (Bold + Resend).
+
 ---
 
-## Deploy
+## Logs útiles
 
-Push a `main` → Railway redespliega solo en ~2 min.
-
-```bash
-git add .
-git commit -m "descripción"
-git push origin main
-```
-
-Ver logs en Railway → project → deployment → **View Logs**. Buscar:
 - `📩 Message from ...` → mensaje entrante
 - `🛠️ Tool call: ...`   → LLM invocó una tool
 - `🤖 AI Response: ...` → respuesta final al usuario
-- `📡 MP API response`  → llamada a Mercado Pago
-- `✅ Libro entregado`  → post-pago
+- `🔗 Link pago (web Bold)` → link enviado
 
 ---
 
@@ -119,6 +118,6 @@ Ver logs en Railway → project → deployment → **View Logs**. Buscar:
 |---|---|
 | Bot no responde | Verificar `WHATSAPP_API_TOKEN` y que la WABA esté suscrita al app |
 | IA devuelve texto raro tipo "According to rules..." | Reasoning leak — verificar que `geminiService` use `msg.content`, no `msg.reasoning` |
-| MP devuelve `invalid_notification_url` | Quitar `MP_NOTIFICATION_URL` de env (dejar sin webhook inline) o usar un dominio propio |
-| Link MP no llega tras "sí" | El LLM no llamó la tool — revisar prompt / dar más contexto en el `history` |
-| `book_id no existe` en logs | El LLM alucinó un id — search_books antes de send_payment_link resuelve esto |
+| Link enviado pero cliente dice que no funciona | Verificar que `GET formacionparatodos.online/libro/<slug>` responda 200 y que `l.disponible === true` en `libros.json` del sitio |
+| `book_id no existe` en logs | El LLM alucinó un id — `search_books` antes de `send_payment_link` resuelve esto |
+| Catálogo bot vs sitio desalineado | Regenerar `data/catalog.json` (ver sección arriba) |

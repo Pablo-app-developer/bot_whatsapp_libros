@@ -2,8 +2,6 @@ import { sendWhatsAppMessage, markMessageAsRead } from '../services/whatsappServ
 import { getAIResponse } from '../services/geminiService.js';
 import { getPaymentLink } from '../services/paymentService.js';
 import { isAdminCommand, processAdminCommand } from '../services/adminService.js';
-import { deliverBook } from '../services/credentialService.js';
-import { findOrderByReference, updateOrderStatus } from '../services/orderService.js';
 import { logger } from '../utils/logger.js';
 import { conversationCache } from '../utils/cache.js';
 
@@ -90,29 +88,3 @@ export const handleIncomingMessage = async (req, res) => {
     }
 };
 
-// ── Wompi webhook ─────────────────────────────────────────────────────────────
-export const handleWompiWebhook = async (req, res) => {
-    try {
-        res.sendStatus(200);
-
-        const event = req.body?.event;
-        const transaction = req.body?.data?.transaction;
-
-        logger.info(`💳 Wompi event: ${event} | status: ${transaction?.status}`);
-
-        if (event !== 'transaction.updated' || transaction?.status !== 'APPROVED') return;
-
-        const order = findOrderByReference(transaction.reference);
-        if (!order) {
-            logger.warn(`⚠️ Orden no encontrada: ${transaction.reference}`);
-            return;
-        }
-        if (order.status === 'approved') return;
-
-        updateOrderStatus(transaction.reference, 'approved');
-        await deliverBook(order);
-
-    } catch (err) {
-        logger.error('❌ Wompi webhook error:', err);
-    }
-};
