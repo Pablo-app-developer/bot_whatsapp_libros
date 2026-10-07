@@ -1,6 +1,6 @@
 import { sendWhatsAppMessage, markMessageAsRead } from '../services/whatsappService.js';
 import { getAIResponse } from '../services/geminiService.js';
-import { getPaymentLink } from '../services/paymentService.js';
+import { getPaymentLink, getPackPaymentLink } from '../services/paymentService.js';
 import { isAdminCommand, processAdminCommand } from '../services/adminService.js';
 import { logger } from '../utils/logger.js';
 import { conversationCache } from '../utils/cache.js';
@@ -73,9 +73,26 @@ export const handleIncomingMessage = async (req, res) => {
                     type: 'text',
                     text: { body: `💳 *Link de pago:*\n\n${paymentData.url}\n\n📬 Al confirmar el pago, el libro te llega automáticamente a tu correo.` },
                 });
-                logger.info(`💳 Link enviado a ${from} para book ${action.bookId}`);
+                logger.info(`💳 Link libro enviado a ${from} para book ${action.bookId}`);
             } catch (payErr) {
                 logger.error('❌ Error enviando link de pago:', payErr);
+                await sendWhatsAppMessage(from, {
+                    type: 'text',
+                    text: { body: 'Uy, la pasarela se cayó un segundo 😅 dame 1 minuto y te reenvío el link.' },
+                });
+            }
+        }
+
+        if (action?.type === 'send_pack_payment_link') {
+            try {
+                const paymentData = await getPackPaymentLink(action.packSlug, from);
+                await sendWhatsAppMessage(from, {
+                    type: 'text',
+                    text: { body: `💳 *Link de pago del pack:*\n\n${paymentData.url}\n\n📬 Al confirmar el pago, los 10 libros del pack te llegan automáticamente a tu correo.` },
+                });
+                logger.info(`💳 Link pack enviado a ${from}: ${action.packSlug}`);
+            } catch (payErr) {
+                logger.error('❌ Error enviando link de pack:', payErr);
                 await sendWhatsAppMessage(from, {
                     type: 'text',
                     text: { body: 'Uy, la pasarela se cayó un segundo 😅 dame 1 minuto y te reenvío el link.' },

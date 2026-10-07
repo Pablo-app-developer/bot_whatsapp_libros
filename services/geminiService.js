@@ -1,6 +1,7 @@
 import Groq from 'groq-sdk';
 import { logger } from '../utils/logger.js';
 import { listCategories, listBooksByCategory, searchBooks, getBookById } from './catalogService.js';
+import { listPacks, getPackBySlug } from './packService.js';
 
 let _groq = null;
 const groq = () => {
@@ -15,9 +16,17 @@ const buildCategoryListText = () =>
         .map(c => `• ${c.name} (${c.count} libros)`)
         .join('\n');
 
+const buildPackListText = () =>
+    listPacks()
+        .map(p => `• ${p.emoji} ${p.titulo} — 10 libros${p.destacado ? ' ⭐ (más solicitado)' : ''}`)
+        .join('\n');
+
 const buildSystemPrompt = () => `Eres el asistente de ventas de "Formación Para Todos" (formacionparatodos.online), una biblioteca digital de libros técnicos. Tu nombre es Valeria.
 
-CADA LIBRO CUESTA $20.000 COP y se entrega automáticamente al correo del cliente al pagar (acceso de por vida al material).
+PRECIOS:
+- LIBRO INDIVIDUAL: $20.000 COP cada uno.
+- PACK TEMÁTICO: 10 libros cuidadosamente elegidos de un área por $100.000 COP (precio normal $200.000, -50%). Es el mejor valor: ahorra $100.000.
+Todo se entrega automáticamente al correo del cliente al pagar (acceso de por vida).
 
 TONO:
 - Directa, confiada, sin rodeos. Como una buena vendedora, no como asistente de soporte.
@@ -28,21 +37,28 @@ TONO:
 CATÁLOGO — 17 categorías disponibles:
 ${buildCategoryListText()}
 
-TIENES 3 HERRAMIENTAS:
-1. list_books(category) → muestra los títulos de una categoría. Úsala cuando el cliente elige una categoría del listado.
-2. search_books(query) → busca libros por palabra clave (ej. "kubernetes", "python", "chatgpt"). Úsala cuando el cliente pide un tema específico que no coincide con una categoría entera.
-3. send_payment_link(book_id) → genera el link de pago. Úsala SOLO cuando el cliente confirme que quiere comprar un libro específico (después de que le mostraste el título).
+PACKS DISPONIBLES (6 packs, 10 libros c/u, $100.000 COP):
+${buildPackListText()}
 
-FLUJO DE VENTA — 3 pasos:
-PASO 1: Cliente saluda o pregunta general → muéstrale las categorías principales (elige 5-6 relevantes de la lista de arriba) y pregunta cuál le interesa.
-PASO 2: Cliente elige categoría o tema → LLAMA list_books o search_books, presenta 5-8 títulos numerados y pregunta cuál quiere.
-PASO 3: Cliente confirma un libro específico (por número o título) → LLAMA send_payment_link con el book_id correcto y responde SOLO: "Listo, aquí el link 👇".
+TIENES 5 HERRAMIENTAS:
+1. list_books(category) → títulos de una categoría. Úsala cuando el cliente elige una categoría.
+2. search_books(query) → busca libros por palabra clave (ej. "kubernetes", "python").
+3. list_packs() → muestra los 6 packs con sus temas y descripción.
+4. send_payment_link(book_id) → link de pago de un libro individual. SOLO cuando el cliente confirme compra de un libro específico.
+5. send_pack_payment_link(pack_slug) → link de pago de un pack. SOLO cuando el cliente confirme compra de un pack específico.
+
+FLUJO DE VENTA:
+PASO 1: Cliente saluda o pregunta general → muéstrale 5-6 categorías relevantes Y menciona que hay packs temáticos a $100.000 (10 libros, 50% off). Pregunta qué le interesa.
+PASO 2a (libro individual): Cliente elige tema → LLAMA list_books o search_books, presenta 5-8 títulos numerados, pregunta cuál quiere.
+PASO 2b (pack): Cliente muestra interés en un área con muchos libros (ej. "quiero varios de IA") → sugiere el pack correspondiente con LLAMA list_packs si todavía no lo ha visto; destaca el ahorro.
+PASO 3a: Cliente confirma un libro → LLAMA send_payment_link con book_id. Responde SOLO: "Listo, aquí el link 👇".
+PASO 3b: Cliente confirma un pack → LLAMA send_pack_payment_link con pack_slug. Responde SOLO: "Perfecto, aquí tu pack 👇".
 
 REGLAS CRÍTICAS:
 - NUNCA muestres tu razonamiento interno, análisis de reglas ni comentarios tipo "User said... According to rules...". Solo la respuesta directa al cliente.
-- NUNCA inventes títulos que no estén en el catálogo. Si el cliente pide algo, usa search_books primero.
-- NUNCA pegues links de pago manualmente en el texto — SIEMPRE usa send_payment_link.
-- NUNCA llames send_payment_link en el primer turno sin haber mostrado el libro específico primero.
+- NUNCA inventes títulos ni packs que no estén en el catálogo. Si el cliente pide algo, usa search_books o list_packs primero.
+- NUNCA pegues links de pago manualmente en el texto — SIEMPRE usa send_payment_link o send_pack_payment_link.
+- NUNCA llames send_payment_link / send_pack_payment_link en el primer turno sin confirmación explícita del producto.
 - Si preguntan si eres un bot: "soy la asistente de Formación Para Todos."
 - Cada pregunta extra que hagas es una venta perdida.`;
 
@@ -85,7 +101,7 @@ const TOOLS = [
         type: 'function',
         function: {
             name: 'send_payment_link',
-            description: 'Envía el link de pago al cliente (checkout Bold en formacionparatodos.online). Úsalo SOLO cuando el cliente confirme que quiere comprar un libro específico del catálogo.',
+            description: 'Envía el link de pago de UN LIBRO INDIVIDUAL al cliente. Úsalo SOLO cuando el cliente confirme que quiere comprar un libro específico del catálogo.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -95,6 +111,31 @@ const TOOLS = [
                     },
                 },
                 required: ['book_id'],
+            },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'list_packs',
+            description: 'Devuelve los 6 packs temáticos disponibles (IA, Datos, Ciberseguridad, DevOps, Arquitectura, Cloud) con descripción y total de libros. Usa esto cuando el cliente pregunta por packs o cuando quieras sugerir un pack porque muestra interés en un área amplia.',
+            parameters: { type: 'object', properties: {} },
+        },
+    },
+    {
+        type: 'function',
+        function: {
+            name: 'send_pack_payment_link',
+            description: 'Envía el link de pago de un PACK TEMÁTICO al cliente ($100.000 COP, 10 libros). Úsalo SOLO cuando el cliente confirme que quiere comprar un pack específico.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    pack_slug: {
+                        type: 'string',
+                        description: 'Slug del pack (ej. "pack-ia-ml", "pack-datos", "pack-ciberseguridad", "pack-devops", "pack-arquitectura", "pack-cloud"). Viene de list_packs.',
+                    },
+                },
+                required: ['pack_slug'],
             },
         },
     },
@@ -109,6 +150,9 @@ const executeTool = (name, args) => {
     if (name === 'search_books') {
         const results = searchBooks(args.query);
         return { query: args.query, results };
+    }
+    if (name === 'list_packs') {
+        return { packs: listPacks() };
     }
     return { error: `Tool desconocida: ${name}` };
 };
@@ -157,12 +201,11 @@ export const getAIResponse = async (conversationHistory) => {
             const args = parseArgs(toolCall.function?.arguments);
             logger.info(`🛠️  Tool call: ${name}`, args);
 
-            // Tool terminal: genera link de pago
+            // Tool terminal: genera link de pago de libro
             if (name === 'send_payment_link') {
                 const book = getBookById(args.book_id);
                 if (!book) {
                     logger.warn('⚠️ Tool send_payment_link con id inválido:', args.book_id);
-                    // Agregamos el error como tool_result y dejamos que el modelo continúe
                     messages.push(msg);
                     messages.push({
                         role: 'tool',
@@ -175,6 +218,26 @@ export const getAIResponse = async (conversationHistory) => {
                 return {
                     text,
                     action: { type: 'send_payment_link', bookId: book.id, bookTitle: book.title },
+                };
+            }
+
+            // Tool terminal: genera link de pago de pack
+            if (name === 'send_pack_payment_link') {
+                const pack = getPackBySlug(args.pack_slug);
+                if (!pack) {
+                    logger.warn('⚠️ Tool send_pack_payment_link con slug inválido:', args.pack_slug);
+                    messages.push(msg);
+                    messages.push({
+                        role: 'tool',
+                        tool_call_id: toolCall.id,
+                        content: JSON.stringify({ error: 'pack_slug no existe. Usa list_packs primero para ver los slugs válidos.' }),
+                    });
+                    continue;
+                }
+                const text = msg?.content?.trim() || 'Perfecto, aquí tu pack 👇';
+                return {
+                    text,
+                    action: { type: 'send_pack_payment_link', packSlug: pack.slug, packTitle: pack.titulo },
                 };
             }
 
