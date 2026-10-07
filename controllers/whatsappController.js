@@ -73,7 +73,7 @@ export const handleIncomingMessage = async (req, res) => {
                 const paymentData = await getPaymentLink(action.bookId, action.bookTitle, from);
                 await sendWhatsAppMessage(from, {
                     type: 'text',
-                    text: { body: `💳 *Link de pago seguro:*\n\n${paymentData.url}\n\n✅ El libro se envía automáticamente por WhatsApp al confirmar el pago.` },
+                    text: { body: `💳 *Link de pago:*\n\n${paymentData.url}\n\n📬 Al confirmar el pago, el libro te llega automáticamente a tu correo.` },
                 });
                 logger.info(`💳 Link enviado a ${from} para book ${action.bookId}`);
             } catch (payErr) {
