@@ -1,25 +1,26 @@
 {
-    "name": "streamflow-whatsapp-backend",
+    "name": "bot-whatsapp-libros",
     "version": "1.0.0",
-    "description": "Backend para chatbot de WhatsApp con IA para venta de cuentas de streaming",
+    "description": "Bot de WhatsApp con IA (Valeria) para venta de libros tecnicos de Formacion Para Todos",
     "main": "server.js",
     "type": "module",
+    "engines": {
+        "node": ">=20"
+    },
     "scripts": {
         "start": "node server.js",
-        "dev": "node --watch server.js",
-        "test": "node test-webhook.js"
+        "dev": "node --watch server.js"
     },
     "keywords": [
         "whatsapp",
         "chatbot",
-        "streaming",
-        "gemini",
-        "ai"
+        "libros",
+        "groq",
+        "bold"
     ],
-    "author": "StreamFlow Colombia",
+    "author": "Formacion Para Todos",
     "license": "MIT",
     "dependencies": {
-        "@google/genai": "^1.41.0",
         "axios": "^1.6.7",
         "body-parser": "^1.20.2",
         "cors": "^2.8.5",
