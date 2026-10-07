@@ -3,10 +3,9 @@ import { deliverBook } from './credentialService.js';
 import { logger } from '../utils/logger.js';
 
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
-const BASE_URL = process.env.BASE_URL || 'https://botwhatsappnetflix-production.up.railway.app';
 
 export const getPaymentLink = async (bookId, bookTitle, customerPhone) => {
-    const amount = 10000;
+    const amount = 20000;
     const reference = `FPT-book${bookId}-${Date.now()}-${customerPhone.slice(-4)}`;
 
     createOrder({

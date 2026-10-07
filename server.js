@@ -34,7 +34,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   res.json({
     status: 'online',
-    service: 'StreamFlow WhatsApp Bot',
+    service: 'Bot WhatsApp Libros - Formación Para Todos',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     endpoints: {
@@ -102,7 +102,7 @@ app.use((req, res) => {
 // ============================================
 app.listen(PORT, () => {
   console.log('\n🚀 ============================================');
-  console.log(`   StreamFlow WhatsApp Bot Server`);
+  console.log(`   Bot WhatsApp Libros — Formación Para Todos`);
   console.log('   ============================================');
   console.log(`   🌐 Server running on: http://localhost:${PORT}`);
   console.log(`   📱 WhatsApp webhook: http://localhost:${PORT}/webhook`);

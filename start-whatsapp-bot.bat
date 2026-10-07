@@ -28,7 +28,7 @@ if not exist ".env" (
     echo [ACCION REQUERIDA] Edita .env con tus credenciales
     echo    - WHATSAPP_API_TOKEN
     echo    - WHATSAPP_PHONE_NUMBER_ID
-    echo    - GEMINI_API_KEY
+    echo    - GROQ_API_KEY
     echo    - WHATSAPP_WEBHOOK_VERIFY_TOKEN
     echo.
     echo Presiona cualquier tecla para abrir el archivo .env...
